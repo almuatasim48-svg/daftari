@@ -56,7 +56,10 @@ export async function openLecture(container, ctx) {
   const toolsWrap = h('div', { class: 'tools-wrap' });
   const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'أدوات الكتابة' });
   const strip = h('div', { class: 'strip' });
-  toolsWrap.append(toolbar, strip);
+  const studyBtns = h('div', { class: 'study-btns' },
+    h('button', { class: 'btn', type: 'button', html: icon('cards', 16) + 'البطاقات', onclick: () => ctx.openCards() }),
+    h('button', { class: 'btn', type: 'button', html: icon('quiz', 16) + 'اختبار', onclick: () => ctx.openQuiz() }));
+  toolsWrap.append(studyBtns, toolbar, strip);
   root.append(toolsWrap);
   const zoomLbl = h('span', { class: 'zoom' });
 

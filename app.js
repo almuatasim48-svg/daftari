@@ -1,6 +1,7 @@
 import * as pdfjsLib from './vendor/pdf.min.mjs';
 import { h, icon, esc, menu, modal, prompt, confirmBox, toast, swatches, SUBJECT_COLORS, TAG_COLORS, contrastText } from './ui.js';
 import { openLecture } from './lecture.js';
+import { initStudy, openCards, openQuiz, testKey } from './study.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
 export { pdfjsLib };
@@ -26,6 +27,7 @@ let nav = { view: 'home' };
 let lectureCtl = null;
 let syncState = { state: 'signedout' };
 let account = null;
+initStudy({ api: window.api, get lib() { return lib; }, pdfjsLib, node: id => lib.nodes[id], openLecture: (id, page) => go({ view: 'lecture', id, page }) });
 
 // ---------------- library ----------------
 function blankLib() { return { v: 1, nodes: {}, tags: {}, settings: structuredClone(DEFAULT_SETTINGS), ui: { expanded: {} } }; }
@@ -190,8 +192,8 @@ function lectureMenu(n, x, y) {
   menu(x, y, [
     { label: 'فتح المحاضرة', onClick: () => go({ view: 'lecture', id: n.id }) },
     'sep',
-    { label: 'إنشاء بطاقات مراجعة', iconHtml: `<span style="color:var(--accent);display:flex">${icon('cards', 16)}</span>`, onClick: () => toast(PHASE2) },
-    { label: 'إنشاء اختبار', iconHtml: `<span style="color:var(--accent);display:flex">${icon('quiz', 16)}</span>`, onClick: () => toast(PHASE2) },
+    { label: 'البطاقات (مراجعة متباعدة)', iconHtml: `<span style="color:var(--accent);display:flex">${icon('cards', 16)}</span>`, onClick: () => openCards([n.id], n.name) },
+    { label: 'اختبار', iconHtml: `<span style="color:var(--accent);display:flex">${icon('quiz', 16)}</span>`, onClick: () => openQuiz([n.id], n.name) },
     'sep',
     { el: tagEl },
     { label: 'إعادة تسمية', onClick: () => rename(n) },
@@ -512,11 +514,12 @@ function tagChips(list, active, onPick) {
   chips.append(h('button', { type: 'button', class: 'chip dashed', onclick: () => newTag() }, '+ تصنيف'));
   return chips;
 }
-function actionBar(t, n) {
+function actionBar(t, list) {
+  const n = list.length, ids = list.map(x => x.id);
   return h('div', { class: 'actionbar', style: { background: t.color + '1A', border: '1px solid ' + t.color + '59' } },
     h('div', { style: { flex: 1, minWidth: '200px' } }, h('b', {}, `${n} ${n === 1 ? 'محاضرة' : 'محاضرات'} بتصنيف "${t.name}"`), h('span', { style: { color: 'var(--muted)' } }, ' — جهّزها للمراجعة مرة وحدة')),
-    h('button', { class: 'btn', type: 'button', style: { background: t.color, color: contrastText(t.color), borderColor: 'transparent' }, html: icon('cards', 16) + 'أنشئ بطاقات مراجعة', onclick: () => toast(PHASE2) }),
-    h('button', { class: 'btn ghost', type: 'button', style: { borderColor: t.color }, html: icon('quiz', 16) + 'أنشئ اختبار', onclick: () => toast(PHASE2) }));
+    h('button', { class: 'btn', type: 'button', style: { background: t.color, color: contrastText(t.color), borderColor: 'transparent' }, html: icon('cards', 16) + 'بطاقات المراجعة', onclick: () => openCards(ids, `بطاقات «${t.name}»`) }),
+    h('button', { class: 'btn ghost', type: 'button', style: { borderColor: t.color }, html: icon('quiz', 16) + 'اختبار', onclick: () => openQuiz(ids, `اختبار «${t.name}»`) }));
 }
 function viewSubject(v, s) {
   const p = h('div', { class: 'page' });
@@ -529,7 +532,7 @@ function viewSubject(v, s) {
     p.append(h('div', { class: 'empty' }, h('div', { style: { color: '#9CC8FF' }, html: icon('file', 40) }), h('div', { style: { fontSize: '16px', fontWeight: 700, color: 'var(--text)' } }, 'اسحب ملفات المحاضرات هنا'), h('div', {}, 'أو اضغط "محاضرة" واختر الملفات. تقدر تضيف كذا ملف مرة وحدة.')));
   } else {
     p.append(tagChips(list, active, t => { nav.tag = t; renderView(); }));
-    if (active) p.append(actionBar(lib.tags[active], list.filter(n => (n.tags || []).includes(active)).length));
+    if (active) p.append(actionBar(lib.tags[active], list.filter(n => (n.tags || []).includes(active))));
     p.append(lectureGrid(list, active));
   }
   v.append(p);
@@ -539,7 +542,7 @@ function viewTag(v, t) {
   const list = Object.values(lib.nodes).filter(n => n.type === 'lecture' && (n.tags || []).includes(t.id)).sort((a, b) => (a.created || 0) - (b.created || 0));
   p.append(h('div', { class: 'head' }, h('div', {}, h('div', { class: 'crumbs' }, 'تصنيف'), h('h1', { class: 'title' }, h('span', { class: 'dot round', style: { background: t.color, width: '14px', height: '14px' } }), t.name)), viewToggle()));
   if (!list.length) p.append(h('div', { class: 'empty' }, 'ما فيه محاضرات بهذا التصنيف. كليك يمين على أي محاضرة واختر التصنيف.'));
-  else { p.append(actionBar(t, list.length)); p.append(lectureGrid(list, null)); }
+  else { p.append(actionBar(t, list)); p.append(lectureGrid(list, null)); }
   v.append(p);
 }
 
@@ -554,7 +557,8 @@ async function viewLecture(v) {
     saveSettings: () => saveLib(),
     back: () => go(s ? { view: 'subject', id: s.id } : { view: 'home' }),
     setFocus: on => $('#app').classList.toggle('focus', on),
-    phase2: () => toast(PHASE2),
+    openCards: () => openCards([n.id], n.name),
+    openQuiz: () => openQuiz([n.id], n.name),
     contextMenu: (x, y) => lectureMenu(n, x, y)
   });
 }
@@ -601,6 +605,14 @@ function viewSettings(v) {
   const accSec = h('section', { class: 'set-sec' }, h('div', { class: 'h' }, 'الحساب والمزامنة'), acct, errLine,
     api.openData ? h('button', { class: 'linkbtn', type: 'button', style: { alignSelf: 'flex-start' }, onclick: () => api.openData() }, 'فتح مجلد ملفات البرنامج على الجهاز') : null);
   p.insertBefore(accSec, p.children[1]);
+  const keyInp = h('input', { class: 'field ltr', type: 'password', placeholder: 'AIza…', value: st.geminiKey || '', style: { flex: 1, minWidth: '240px' } });
+  const keyMsg = h('div', { style: { fontSize: '12px', color: 'var(--muted)' } }, st.geminiKey ? 'المفتاح محفوظ ✓' : 'بدون مفتاح ما تشتغل البطاقات والاختبارات');
+  const saveKey = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+    const k = keyInp.value.trim(); keyMsg.textContent = 'أتأكد من المفتاح…';
+    try { await testKey(k); st.geminiKey = k; saveLib(); keyMsg.textContent = 'المفتاح شغال ✓'; keyMsg.style.color = '#3FBF7F'; }
+    catch (e) { keyMsg.textContent = 'المفتاح ما اشتغل: ' + e.message; keyMsg.style.color = 'var(--danger)'; } } }, 'حفظ');
+  p.insertBefore(h('section', { class: 'set-sec' }, h('div', {}, h('div', { class: 'h' }, 'الذكاء الاصطناعي (Gemini)'), h('div', { class: 'd' }, 'يسوي البطاقات والاختبارات من سلايدات المحاضرة. المفتاح مجاني من Google AI Studio.')),
+    h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', maxWidth: '640px' } }, keyInp, saveKey), keyMsg), p.children[2]);
   v.append(p);
 }
 

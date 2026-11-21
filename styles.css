@@ -249,3 +249,44 @@ mark { background: #FFE27A; color: #1B1B1B; border-radius: 3px; padding: 0 2px; 
 .tagrow { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border); }
 .tagrow .n { flex: 1; font-weight: 600; }
 .acct { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+
+/* ---------- study: cards & quiz ---------- */
+.study-btns { position: absolute; left: 20px; top: 12px; display: flex; gap: 8px; }
+.study-btns .btn { height: 40px; }
+@media (max-width: 1250px) { .study-btns { position: static; } }
+.st-bg { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; }
+.st-box { width: min(860px, 94vw); height: min(86vh, 900px); border-radius: 18px; background: var(--panel2); border: 1px solid var(--border2); box-shadow: var(--pop-shadow); display: flex; flex-direction: column; overflow: hidden; }
+.st-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.st-title { font-size: 18px; font-weight: 700; }
+.st-sub { font-size: 13px; color: var(--muted); }
+.st-body { flex: 1; overflow: auto; padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+.st-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 30px; }
+.st-busy { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; color: var(--muted); }
+.spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--border2); border-top-color: var(--accent); animation: sp 0.9s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.st-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.st-list { display: flex; flex-direction: column; gap: 8px; }
+.st-card { padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.st-card .q { font-weight: 600; }
+.st-card .a { color: var(--soft); }
+.st-card .m { display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--muted); }
+.st-card .q, .st-card .a, .st-flip .q, .st-flip .a, .st-q, .st-opt, .st-exp { unicode-bidi: plaintext; text-align: start; }
+.st-prog { height: 4px; border-radius: 4px; background: var(--border); overflow: hidden; flex: none; }
+.st-prog div { height: 100%; background: var(--accent); transition: width .25s; }
+.st-flip { min-height: 260px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+.st-flip .q { font-size: 22px; font-weight: 700; text-align: center; }
+.st-flip .a { font-size: 19px; color: var(--accent); padding-top: 16px; border-top: 1px dashed var(--border2); width: 100%; text-align: center; }
+.st-grades { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.st-grades button { padding: 12px 8px; border-radius: 12px; border: 2px solid; background: var(--panel); color: var(--text); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.st-grades button span { font-size: 12px; color: var(--muted); }
+.st-grades button:hover { background: var(--hover); }
+.st-q { font-size: 19px; font-weight: 700; line-height: 1.6; }
+.st-opts { display: flex; flex-direction: column; gap: 10px; }
+.st-opt { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--panel); color: var(--text); font-size: 15px; }
+.st-opt b { width: 28px; height: 28px; flex: none; border-radius: 8px; background: var(--active); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.st-opt:not(:disabled):hover { border-color: var(--accent); }
+.st-opt.right { border-color: #3FBF7F; background: rgba(63,191,127,.14); }
+.st-opt.wrongp { border-color: #E5484D; background: rgba(229,72,77,.14); }
+.st-opt.dim { opacity: .5; }
+.st-opt:disabled { cursor: default; }
+.st-exp { padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }

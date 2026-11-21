@@ -1,5 +1,5 @@
 // App shell cache: fast start and works offline; refreshes itself in the background
-const CACHE = 'daftari-v1';
+const CACHE = 'daftari-v2';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
