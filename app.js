@@ -9,7 +9,7 @@ export { pdfjsLib };
 const api = window.api;
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.3.1';
 const PHASE2 = 'بطاقات المراجعة والاختبارات جاية في المرحلة الثانية من البرنامج';
 
 const DEFAULT_SETTINGS = {

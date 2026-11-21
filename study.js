@@ -7,40 +7,54 @@ let ctx = null; // { api, lib, pdfjsLib, node(id), saveLib(), openLecture(id, pa
 export function initStudy(c) { ctx = c; }
 
 // ---------------- Gemini ----------------
-let modelP = null;
+let modelsP = null, goodModel = null;
 function key() { return (ctx.lib.settings.geminiKey || '').trim(); }
 const ver = n => (n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1] * 1;
-async function pickModel() {
-  return modelP ||= (async () => {
+// candidate models, best first: newest stable flash, newest flash-lite, latest aliases, then older flashes
+async function models() {
+  return modelsP ||= (async () => {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key())}`);
       const j = await r.json();
       if (j.error) throw new Error(j.error.message);
       const names = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace('models/', ''));
-      // newest stable "gemini-X-flash", then any newest flash, then latest alias
-      const stable = names.filter(n => /^gemini-\d+(\.\d+)?-flash$/.test(n)).sort((a, b) => ver(b) - ver(a));
-      const flash = names.filter(n => /flash/.test(n) && !/lite|image|tts|live|audio|embedding/.test(n)).sort((a, b) => ver(b) - ver(a));
-      return stable[0] || (names.includes('gemini-flash-latest') ? 'gemini-flash-latest' : null) || flash[0] || names[0];
-    } catch (e) { modelP = null; throw e; }
+      const byVer = (a, b) => ver(b) - ver(a);
+      const stable = names.filter(n => /^gemini-\d+(\.\d+)?-flash$/.test(n)).sort(byVer);
+      const lite = names.filter(n => /^gemini-\d+(\.\d+)?-flash-lite$/.test(n)).sort(byVer);
+      const alias = ['gemini-flash-latest', 'gemini-flash-lite-latest'].filter(n => names.includes(n));
+      const other = names.filter(n => /flash/.test(n) && !/image|tts|live|audio|embedding/.test(n)).sort(byVer);
+      return [...new Set([...stable.slice(0, 2), ...alias, ...lite.slice(0, 2), ...other])].slice(0, 8);
+    } catch (e) { modelsP = null; throw e; }
   })();
 }
-async function gemini(prompt, schema) {
+async function callModel(model, body) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key())}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, j };
+}
+async function gemini(prompt, schema, onStatus) {
   if (!key()) throw Object.assign(new Error('nokey'), { code: 'nokey' });
-  const model = await pickModel();
+  const list = await models();
+  const order = goodModel ? [goodModel, ...list.filter(m => m !== goodModel)] : list;
   const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.9 } };
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key())}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 429 || r.status === 503) { await new Promise(res => setTimeout(res, 4000 * (attempt + 1))); continue; }
-    if (j.error) {
-      const sug = String(j.error.message || '').match(/use models\/([\w.-]+)/);
-      if (sug && sug[1] !== model && attempt < 2) { modelP = Promise.resolve(sug[1]); return gemini(prompt, schema); }
-      throw new Error(j.error.message || 'gemini');
+  let last = '';
+  for (const model of order) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      onStatus && onStatus(model);
+      const { status, j } = await callModel(model, body);
+      if (!j.error && status < 300) {
+        const txt = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+        try { const out = JSON.parse(txt); goodModel = model; return out; } catch { last = 'رد غير مفهوم من Gemini'; break; }
+      }
+      last = `${model}: ${j.error?.message || 'HTTP ' + status}`;
+      const quotaZero = /limit: 0|quota/i.test(j.error?.message || '') && !/retry in [0-9]/i.test(j.error?.message || '');
+      if (status === 503 && attempt === 0) { await new Promise(r => setTimeout(r, 2500)); continue; }
+      if (status === 429 && !quotaZero && attempt === 0) { await new Promise(r => setTimeout(r, 3000)); continue; }
+      if (status === 400 && /API key/i.test(j.error?.message || '')) throw new Error(j.error.message);
+      break; // try next model
     }
-    const txt = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-    try { return JSON.parse(txt); } catch { throw new Error('رد غير مفهوم من Gemini'); }
   }
-  throw new Error('Gemini مشغول، جرّب بعد شوي');
+  throw new Error(last || 'Gemini ما رد');
 }
 
 // ---------------- lecture text ----------------
@@ -72,7 +86,7 @@ async function saveCards(id, cards) { await ctx.api.saveFile('cards/' + id + '.j
 export async function cardCount(id) { const c = await loadCards(id); return { total: c.length, due: c.filter(x => (x.due || 0) <= Date.now()).length }; }
 
 const CARD_SCHEMA = { type: 'OBJECT', properties: { cards: { type: 'ARRAY', items: { type: 'OBJECT', properties: { q: { type: 'STRING' }, a: { type: 'STRING' }, page: { type: 'INTEGER' } }, required: ['q', 'a', 'page'] } } }, required: ['cards'] };
-async function generateCards(id, n, existing) {
+async function generateCards(id, n, existing, onStatus) {
   const { text } = await lectureText(id);
   const name = ctx.node(id)?.name || '';
   const avoid = existing.length ? `\nThese cards ALREADY exist — do NOT repeat or rephrase them, cover different facts:\n${existing.map(c => '- ' + c.q).join('\n')}` : '';
@@ -82,7 +96,7 @@ Rules: one fact per card; question short and specific; answer concise (max ~25 w
 
 LECTURE:
 ${text}`;
-  const r = await gemini(prompt, CARD_SCHEMA);
+  const r = await gemini(prompt, CARD_SCHEMA, onStatus);
   return (r.cards || []).slice(0, n).map(c => ({ id: uid(), q: String(c.q).trim(), a: String(c.a).trim(), page: Math.max(1, Number(c.page) || 1), created: Date.now(), due: 0, interval: 0, ease: 2.5, reps: 0, lapses: 0 }));
 }
 
@@ -143,7 +157,7 @@ export async function openCards(ids, title) {
       const mine = all.filter(x => x.lid === id).map(x => x.c);
       if (onlyMissing && mine.length) continue;
       busy(ov.body, multi ? `أجهز بطاقات "${ctx.node(id)?.name}" (${k + 1}/${ids.length})…` : `أجهز ${n} بطاقة من المحاضرة…`);
-      const fresh = await generateCards(id, n, mine);
+      const fresh = await generateCards(id, n, mine, m => { const el = ov.body.querySelector('.st-busy div:last-child'); if (el && !el.dataset.base) el.dataset.base = el.textContent; if (el) el.textContent = el.dataset.base + ' (' + m + ')'; });
       for (const c of fresh) all.push({ lid: id, c });
       await persist(id);
     }
@@ -247,7 +261,7 @@ export async function openQuiz(ids, title) {
 Rules: 4 options each, exactly one correct, plausible distractors from the same lecture, exam style (MCQ like medical school finals); keep terms in English as on the slides; "correct" is the 0-based index; "explanation" is one or two short sentences; "page" is the slide number; "lecture" is the lecture number (1-based).
 
 ${texts.join('\n\n')}`;
-      const r = await gemini(prompt, QUIZ_SCHEMA);
+      const r = await gemini(prompt, QUIZ_SCHEMA, m => { const el = ov.body.querySelector('.st-busy div:last-child'); if (el) el.textContent = 'أجهز الاختبار… (' + m + ')'; });
       const qs = (r.questions || []).filter(q => q.options?.length >= 2).slice(0, n).map(q => {
         const order = shuffle(q.options.map((o, i) => i));
         return { ...q, options: order.map(i => q.options[i]), correct: order.indexOf(q.correct), lid: ids[Math.max(0, Math.min(ids.length - 1, (q.lecture || 1) - 1))] };
@@ -291,6 +305,6 @@ export async function testKey(k) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=5&key=${encodeURIComponent(k)}`);
   const j = await r.json().catch(() => ({}));
   if (j.error) throw new Error(j.error.message);
-  modelP = null;
+  modelsP = null; goodModel = null;
   return true;
 }
