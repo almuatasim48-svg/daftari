@@ -9,6 +9,7 @@ export { pdfjsLib };
 const api = window.api;
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+export const APP_VERSION = '0.3.0';
 const PHASE2 = 'بطاقات المراجعة والاختبارات جاية في المرحلة الثانية من البرنامج';
 
 const DEFAULT_SETTINGS = {
@@ -434,7 +435,7 @@ function crumbs(n) {
 }
 function viewHome(v) {
   const p = h('div', { class: 'page' });
-  p.append(h('h1', { class: 'title' }, 'هلا' + (account?.name ? ' ' + account.name.split(' ')[0] : '')));
+  p.append(h('div', { class: 'head' }, h('h1', { class: 'title' }, 'هلا' + (account?.name ? ' ' + account.name.split(' ')[0] : '')), h('span', { class: 'badge ltr', title: 'رقم التحديث' }, 'v' + APP_VERSION)));
   const roots = kids(null);
   if (!roots.length) {
     p.append(h('div', { class: 'empty' }, h('div', { style: { fontSize: '18px', fontWeight: 700, color: 'var(--text)' } }, 'نبدأ؟'),
@@ -567,7 +568,7 @@ async function viewLecture(v) {
 function viewSettings(v) {
   const st = lib.settings;
   const p = h('div', { class: 'page', style: { maxWidth: '1080px' } });
-  p.append(h('h1', { class: 'title' }, 'الإعدادات'));
+  p.append(h('div', { class: 'head' }, h('h1', { class: 'title' }, 'الإعدادات'), h('span', { class: 'badge ltr' }, 'الإصدار v' + APP_VERSION)));
   const opt = (on, pv, title, desc, badge, onClick) => h('button', { class: 'opt' + (on ? ' on' : ''), type: 'button', onclick: onClick }, pv, h('div', { class: 't' }, title, badge ? h('span', { class: 'badge' }, badge) : null), h('div', { class: 'd' }, desc));
   const line = (w, c = 'var(--muted)') => `<div style="height:5px;width:${w}%;background:${c};border-radius:2px;opacity:.7"></div>`;
   const pvSide = h('div', { class: 'pv', html: `<div style="flex:3;border-radius:6px;background:#fff;padding:10px;display:flex;flex-direction:column;gap:5px">${line(55, '#C62828')}${line(80, '#ccc')}${line(70, '#ccc')}</div><div style="flex:2;border-radius:6px;background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:5px">${line(90)}${line(70)}${line(80)}</div>` });
