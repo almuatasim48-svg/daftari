@@ -7,9 +7,9 @@ let ctx = null; // { api, lib, pdfjsLib, node(id), saveLib(), openLecture(id, pa
 export function initStudy(c) { ctx = c; }
 
 // ---------------- Gemini ----------------
-const MODEL_PREF = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'];
 let modelP = null;
 function key() { return (ctx.lib.settings.geminiKey || '').trim(); }
+const ver = n => (n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1] * 1;
 async function pickModel() {
   return modelP ||= (async () => {
     try {
@@ -17,10 +17,10 @@ async function pickModel() {
       const j = await r.json();
       if (j.error) throw new Error(j.error.message);
       const names = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace('models/', ''));
-      const flash = names.filter(n => /flash/.test(n) && !/lite|image|tts|live|audio|thinking|exp|preview/.test(n));
-      for (const p of MODEL_PREF) if (names.includes(p)) return p;
-      flash.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-      return flash[0] || names[0] || MODEL_PREF[0];
+      // newest stable "gemini-X-flash", then any newest flash, then latest alias
+      const stable = names.filter(n => /^gemini-\d+(\.\d+)?-flash$/.test(n)).sort((a, b) => ver(b) - ver(a));
+      const flash = names.filter(n => /flash/.test(n) && !/lite|image|tts|live|audio|embedding/.test(n)).sort((a, b) => ver(b) - ver(a));
+      return stable[0] || (names.includes('gemini-flash-latest') ? 'gemini-flash-latest' : null) || flash[0] || names[0];
     } catch (e) { modelP = null; throw e; }
   })();
 }
@@ -32,7 +32,11 @@ async function gemini(prompt, schema) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key())}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (r.status === 429 || r.status === 503) { await new Promise(res => setTimeout(res, 4000 * (attempt + 1))); continue; }
-    if (j.error) throw new Error(j.error.message || 'gemini');
+    if (j.error) {
+      const sug = String(j.error.message || '').match(/use models\/([\w.-]+)/);
+      if (sug && sug[1] !== model && attempt < 2) { modelP = Promise.resolve(sug[1]); return gemini(prompt, schema); }
+      throw new Error(j.error.message || 'gemini');
+    }
     const txt = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
     try { return JSON.parse(txt); } catch { throw new Error('رد غير مفهوم من Gemini'); }
   }
