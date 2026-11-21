@@ -290,3 +290,6 @@ mark { background: #FFE27A; color: #1B1B1B; border-radius: 3px; padding: 0 2px; 
 .st-opt.dim { opacity: .5; }
 .st-opt:disabled { cursor: default; }
 .st-exp { padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
+
+.brand-home { flex: 1; display: flex; align-items: center; gap: 10px; border: 0; background: none; color: var(--text); padding: 4px; border-radius: 10px; text-align: right; }
+.brand-home:hover { background: var(--hover); }

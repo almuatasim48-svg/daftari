@@ -9,7 +9,7 @@ export { pdfjsLib };
 const api = window.api;
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-export const APP_VERSION = '0.3.1';
+export const APP_VERSION = '0.3.2';
 const PHASE2 = 'بطاقات المراجعة والاختبارات جاية في المرحلة الثانية من البرنامج';
 
 const DEFAULT_SETTINGS = {
@@ -74,7 +74,8 @@ function renderSidebar() {
   sb.innerHTML = '';
   const plus = h('button', { class: 'icon-btn outlined', 'aria-label': 'إضافة', title: 'إضافة', html: icon('plus') });
   plus.onclick = e => { const r = plus.getBoundingClientRect(); plus.classList.add('on'); addMenu(r.right, r.bottom + 6); setTimeout(() => plus.classList.remove('on'), 50); };
-  sb.append(h('div', { class: 'brand' }, h('div', { class: 'logo', html: icon('book') }), h('div', { class: 'brand-name' }, 'دفتري'), plus));
+  const home = h('button', { type: 'button', class: 'brand-home', title: 'الصفحة الرئيسية', onclick: () => go({ view: 'home' }) }, h('div', { class: 'logo', html: icon('book') }), h('div', { class: 'brand-name' }, 'دفتري'));
+  sb.append(h('div', { class: 'brand' }, home, plus));
   const s = h('button', { class: 'search', type: 'button', html: icon('search', 16) + '<span>ابحث في كل محاضراتك…</span><span class="k ltr">Ctrl K</span>' });
   s.onclick = openSearch;
   sb.append(s);
